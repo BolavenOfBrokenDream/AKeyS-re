@@ -4,6 +4,7 @@ tva_env/
 .venv/
 __pycache__
 old_results/
+docs/
 *.log
 usage*.jsonl
 api_ds.txt

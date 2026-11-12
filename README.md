@@ -80,15 +80,6 @@ sh scripts/egoschema_fullset.sh
 
 The code will run an automated evaluation script and output accuracy and mean frame number.
 
-## Reproduction documents
-
-The Chinese reproduction report and software user manual are included in this fork:
-
-- [复现报告（PDF）](docs/复现报告/main.pdf) · [LaTeX 源文件](docs/复现报告/main.tex)
-- [软件用户手册（Word）](docs/用户手册/AKeyS视频问答复现软件用户手册.docx) · [Markdown 源文件](docs/用户手册/AKeyS视频问答复现软件用户手册.md)
-
-To obtain this reproduction version, clone `https://github.com/BolavenOfBrokenDream/AKeyS-re.git`.
-
 ## DeepSeek five-sample smoke validation
 
 Create the virtual environment with `python -m venv .venv` and install `requirements.txt`. On Python 3.14, the requirements file selects compatible package versions automatically. Set your DeepSeek key as the `OPENAI_API_KEY` environment variable (do not store it in any file inside the repository); the scripts read it without printing it, call `deepseek-flash` at `https://api.deepseek.com`, disable thinking, and use `cache/deepseek_flash.pkl` separately from the GPT-4o cache.
