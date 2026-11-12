@@ -1,0 +1,20 @@
+{
+  "run_id": "20261109_185505",
+  "samples": 500,
+  "correct": 329,
+  "accuracy": 0.658,
+  "mean_frames": 18.0,
+  "answer_parse_failure_rate": 0.0,
+  "search_status": {
+    "completed": 500
+  },
+  "api_calls": 500,
+  "cache_hits": 0,
+  "api_errors": 0,
+  "prompt_tokens": 305883,
+  "completion_tokens": 3500,
+  "cached_tokens": 0,
+  "total_tokens": 309383,
+  "total_cost_usd": 0.09596489999999999,
+  "cost_per_correct_usd": 0.0002916866261398176
+}

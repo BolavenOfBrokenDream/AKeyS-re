@@ -5,8 +5,9 @@ from tqdm import tqdm
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from util import *
-from model import GPT
+from model import GPT, set_sample_id
 from arg_parser import parse_args
+from eval import main as evaluate_results
 from summarizer import summarize_one_video, \
       qa_one_video_by_summary, postprocess_response_dict
 from video_seg import VideoSeg, extract_videoseg_from_descriptions, split_and_reconnect_segments
@@ -22,20 +23,32 @@ logger = set_logger(timestamp, global_args.logger_base_path)
 
 
 api_key = os.getenv("OPENAI_API_KEY")
+if global_args.api_key_file:
+    with open(global_args.api_key_file, encoding="utf-8") as key_file:
+        api_key = key_file.read().strip()
 base_url = os.getenv("OPENAI_BASE_URL")
 
 
-with open(global_args.example_summary_path,'r') as ex:
+with open(global_args.example_summary_path,'r', encoding="utf-8") as ex:
     example_summary = ex.read()
 
-with open(global_args.example_qa_by_summary_path,'r') as ex:
+with open(global_args.example_qa_by_summary_path,'r', encoding="utf-8") as ex:
     example_qa_by_summary = ex.read()
 
 
-summarizer = GPT(api_key=api_key, model_name=global_args.model_name, temperature=global_args.temperature, base_url=base_url)
-qa_model = GPT(api_key=api_key, model_name=global_args.model_name, temperature=global_args.temperature, base_url=base_url)
-planner = GPT(api_key=api_key, model_name=global_args.model_name, temperature=global_args.temperature, base_url=base_url)
-self_evaluator = GPT(api_key=api_key, model_name=global_args.model_name, temperature=global_args.temperature, base_url=base_url)
+model_kwargs = {
+    "api_key": api_key,
+    "model_name": global_args.model_name,
+    "temperature": global_args.temperature,
+    "base_url": base_url,
+    "max_tokens": global_args.max_tokens,
+    "usage_log_path": global_args.usage_log_path,
+    "run_id": timestamp,
+}
+summarizer = GPT(**model_kwargs)
+qa_model = GPT(**model_kwargs)
+planner = GPT(**model_kwargs)
+self_evaluator = GPT(**model_kwargs)
 
 
 
@@ -70,7 +83,7 @@ def bfs_select_segments(question, caption, num_frames, segment_des, use_cache=Tr
     ```
     """
     system_prompt = "You are a helpful assistant designed to output JSON."
-    response, _ = planner.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True)
+    response, _ = planner.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True, call_type="planner")
     return response
 
 
@@ -103,7 +116,7 @@ def gbfs_select_one_segment(question, caption, num_frames, segment_des, use_cach
     ```
     """
     system_prompt = "You are a helpful assistant designed to output JSON."
-    response, _ = planner.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True)
+    response, _ = planner.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True, call_type="planner")
     return response
 
 
@@ -131,7 +144,7 @@ def dijkstra_select_one_segment(question, caption, num_frames, segment_des, use_
     ```
     """
     system_prompt = "You are a helpful assistant designed to output JSON."
-    response, _ = planner.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True)
+    response, _ = planner.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True, call_type="planner")
     return response
 
 
@@ -168,7 +181,7 @@ def a_star_select_one_segment(question, caption, num_frames, segment_des, use_ca
     ```
     """
     system_prompt = "You are a helpful assistant designed to output JSON."
-    response, _ = planner.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True)
+    response, _ = planner.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True, call_type="planner")
     return response
 
 
@@ -189,7 +202,7 @@ def self_eval(previous_prompt, answer, use_cache=True):
     Please generate the confidence with JSON format {confidence_format}
     """
     system_prompt = "You are a helpful assistant designed to output JSON."
-    response, _ = self_evaluator.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True)
+    response, _ = self_evaluator.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True, call_type="confidence")
     return response
 
 
@@ -208,7 +221,7 @@ def generate_answer_cot(question, caption, num_frames, use_cache=True):
     Please think step-by-step and write the best answer index in Json format {answer_format}. Note that only one answer is returned for the question.
     """
     system_prompt = "You are a helpful assistant."
-    response, _ = qa_model.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=False)
+    response, _ = qa_model.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=False, call_type="reflect_qa")
     return prompt, response
 
 
@@ -227,7 +240,7 @@ def generate_answer_direct(question, caption, num_frames, use_cache=True):
     Please think carefully and write the best answer index in Json format {answer_format}. Note that only one answer is returned for the question, and you must select one answer index from the candidates.
     """
     system_prompt = "You are a helpful assistant designed to output JSON."
-    response, _ = qa_model.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True)
+    response, _ = qa_model.forward(head=system_prompt, prompt=prompt, logger=logger, use_cache=use_cache, use_json_format=True, call_type="final_qa")
     return response
 
 
@@ -325,6 +338,7 @@ def select_process(formatted_question, sample_idx, sampled_caps, num_frames, ste
 
     # LLM decides which segment from `segment_des` to use        
     candidate_descriptions = select_fn(formatted_question, sampled_caps, num_frames, segment_des, args.use_cache)
+    selected_descriptions = None
     if candidate_descriptions != None:
         parsed_candidate_descriptions = parse_json(candidate_descriptions)
         selected_descriptions = get_frames_descriptions(parsed_candidate_descriptions)
@@ -357,6 +371,7 @@ def select_process(formatted_question, sample_idx, sampled_caps, num_frames, ste
 
 def run_one_question(video_id, ann, caps, logs, args):
 
+    set_sample_id(video_id)
     logger.info(f"Start to process {video_id}")
     print(f"\nStart video: {video_id}")
     
@@ -502,6 +517,8 @@ def run_one_question(video_id, ann, caps, logs, args):
         "corr": corr,
         "count_frame": count_frame,
         "get_ans_step": get_ans_step,
+        "answer_parse_failed": answer == -1,
+        "search_status": "max_steps" if get_ans_step == "final_direct_qa" else "completed",
     }
 
 
@@ -519,15 +536,6 @@ def main(args):
         specific_video_ids = [args.specific_id]
         process_video_ids = get_intersection(specific_video_ids, list(anns.keys()))
     
-    if args.reprocess_log != None:
-        # Load the log file and find video_ids with answer == -1
-        reprocess_log = json.load(open(args.reprocess_log, "r"))
-        process_video_ids = [
-            video_id for video_id, log in reprocess_log.items() 
-            # if log["answer"] == -1
-            if log["answer"] != log["label"]
-        ]
-    
     if args.avoid_id != None:
         process_video_ids.remove(args.avoid_id)
     
@@ -542,28 +550,40 @@ def main(args):
         for video_id in process_video_ids
     ]
 
-    # parallel processing
-    # with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
-    #     for _ in tqdm(executor.map(lambda p: run_one_question(*p), tasks), total=len(tasks), desc="Processing"):
-    #         pass
-    
-    for task in tqdm(tasks):
+    def run_task(task):
         try:
             run_one_question(*task)
-        except Exception as e:
-            print(f"\nError -- main -- {e}\n")
+        except Exception as exc:
+            video_id, ann = task[:2]
+            logger.exception(f"Error processing {video_id}")
+            print(f"\nError -- main -- {exc}\n")
+            logs[video_id] = {
+                "answer": -1,
+                "label": int(ann["truth"]),
+                "corr": 0,
+                "count_frame": 0,
+                "get_ans_step": None,
+                "answer_parse_failed": True,
+                "search_status": "error",
+                "error": f"{type(exc).__name__}: {exc}",
+            }
 
-    json.dump(logs, open(output_result_file, "w"))
+    with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+        for _ in tqdm(executor.map(run_task, tasks), total=len(tasks), desc="Processing"):
+            pass
+
+    with open(output_result_file, "w", encoding="utf-8") as result_file:
+        json.dump(logs, result_file, ensure_ascii=False, indent=2)
+    return output_result_file
 
 
 if __name__ == "__main__":
     args = parse_args()
     logger.info(args)
 
-    main(args)
-    
+    result_file = main(args)
+
     print(args)
     print(f"\ntimestamp: {timestamp}\n")
 
-    # eval
-    os.system(f"python3 eval.py results/{args.dataset}/{timestamp}.json")
+    evaluate_results(result_file)

@@ -1,0 +1,22 @@
+{
+  "dataset": "EgoSchema Subset",
+  "model": "deepseek-flash",
+  "temperature": 0.2,
+  "samples": 500,
+  "correct": 350,
+  "accuracy": 0.7,
+  "mean_frames": 22.508,
+  "answer_parse_failure_rate": 0.0,
+  "search_status": {
+    "completed": 440,
+    "max_steps": 60
+  },
+  "api_calls": 10319,
+  "cache_hits": 5452,
+  "api_errors": 0,
+  "prompt_tokens": 14857814,
+  "completion_tokens": 1226698,
+  "cached_tokens": 6951826,
+  "total_tokens": 16084512,
+  "total_cost_usd": 3.885544956
+}

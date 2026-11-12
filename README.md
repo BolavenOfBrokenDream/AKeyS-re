@@ -80,6 +80,33 @@ sh scripts/egoschema_fullset.sh
 
 The code will run an automated evaluation script and output accuracy and mean frame number.
 
+## Reproduction documents
+
+The Chinese reproduction report and software user manual are included in this fork:
+
+- [复现报告（PDF）](docs/复现报告/main.pdf) · [LaTeX 源文件](docs/复现报告/main.tex)
+- [软件用户手册（Word）](docs/用户手册/AKeyS视频问答复现软件用户手册.docx) · [Markdown 源文件](docs/用户手册/AKeyS视频问答复现软件用户手册.md)
+
+To obtain this reproduction version, clone `https://github.com/BolavenOfBrokenDream/AKeyS-re.git`.
+
+## DeepSeek five-sample smoke validation
+
+Create the virtual environment with `python -m venv .venv` and install `requirements.txt`. On Python 3.14, the requirements file selects compatible package versions automatically. Set your DeepSeek key as the `OPENAI_API_KEY` environment variable (do not store it in any file inside the repository); the scripts read it without printing it, call `deepseek-flash` at `https://api.deepseek.com`, disable thinking, and use `cache/deepseek_flash.pkl` separately from the GPT-4o cache.
+
+Run from the repository root:
+
+```bash
+bash scripts/deepseek_smoke.sh
+```
+
+This command is capped at five samples. Predictions and logs are written to `results/deepseek_akeys/`; `usage.jsonl` records the run ID, sample ID, call type, raw response, API status, and actual token usage. Answer parsing failures count as incorrect answers. Summarize one run with `python summarize_run.py results/deepseek_akeys/TIMESTAMP.json results/deepseek_akeys/usage.jsonl --output results/deepseek_akeys/TIMESTAMP_summary.json`; optional price arguments are denominated in USD per million tokens.
+
+The independent uniform baseline supports 18 or 24 frames through `--num_frames`. For example, after setting the same API options, run `python uniform_baseline.py --model_name deepseek-flash --num_frames 24 --process_num 5 --cache_path cache/deepseek_uniform_24.pkl`. It is not executed by the AKeyS smoke script.
+
+After checking the 5-sample AKeyS run, `bash scripts/deepseek_full.sh` runs all three 500-sample experiments in order: uniform 18 frames, uniform 24 frames, and AKeyS-A*. Each experiment uses a separate cache and usage log, and the script writes per-run summaries using peak prices.
+
+The final AKeyS results are kept in `results/deepseek_akeys_final/`: `predictions.json` contains the 500 per-sample predictions and `summary.json` the overall metrics (70.0% accuracy, 22.508 mean frames). Uniform-baseline predictions and summaries are in `results/deepseek_uniform/`.
+
 For a step-by-step analysis, run:
 
 ```

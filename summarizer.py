@@ -78,7 +78,8 @@ def summarize_one_video(summarizer, video_id, sample_caps, \
         caps += c + "\n"
     instruction = str(video_id) + "\n" + systerm + "\n" + incontext_prompt.format(example = example_summary, caption = caps)
     response, info = summarizer.forward(head = None, prompt = instruction, \
-                                        use_cache=use_cache, logger=logger)
+                                        use_cache=use_cache, logger=logger,
+                                        sample_id=video_id, call_type="summary")
     return response
 
 
@@ -101,7 +102,8 @@ def qa_one_video_by_summary(qa_model, ann, summary, video_id, sample_caps, \
         example = example_qa_by_summary, caption = caps, summary = summary, question = que, option = opt
         ) + "\n" + response_prompt
     response, info = qa_model.forward(head=None, prompt=instruction, \
-                                      use_cache=use_cache, logger=logger)
+                                      use_cache=use_cache, logger=logger,
+                                      sample_id=video_id, call_type="summary_qa")
 
     response_dict = None
     try: 

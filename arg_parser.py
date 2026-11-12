@@ -14,9 +14,13 @@ def parse_args():
     # gpt-4-1106-preview, gpt-4o-2024-11-20, o3_mini, DeepSeek-R1, llama-3.3-70b
     parser.add_argument("--model_name", default="gpt-4o-2024-11-20", type=str)
     parser.add_argument("--temperature", default=1.0, type=float)   # 2.0
+    parser.add_argument("--max_tokens", default=1024, type=int)
+    parser.add_argument("--api_key_file", default=None, type=str)
+    parser.add_argument("--usage_log_path", default=None, type=str)
     # cache: cache_gpt4o, cache_o3mini, cache_deepseekr1.pkl, llama_3.3_70b.pkl
     parser.add_argument("--cache_path", default="cache/cache_gpt4o.pkl", type=str)
     parser.add_argument("--use_cache", action='store_false', help="Whether to use llm cache")
+    parser.add_argument("--num_frames", default=24, type=int, help="Frames for uniform baseline")
 
     # output / logger
     parser.add_argument("--output_base_path", default="results/egoschema_subset/", type=str)  
@@ -72,7 +76,6 @@ def parse_args():
     parser.add_argument("--specific_id", default=None, type=str)
     parser.add_argument("--specific_id_path", default=None, type=str, help="path to a list json file")
     parser.add_argument("--avoid_id", default=None, type=str)
-    parser.add_argument("--reprocess_log", default=None, type=str)
 
     # in-context learning examples
     parser.add_argument("--example_summary_path", default="data/egoschema/example_summary.txt", type=str)

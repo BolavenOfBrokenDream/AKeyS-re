@@ -8,11 +8,13 @@ import numpy as np
 import random
 import logging
 import pdb
+from threading import Lock
 from arg_parser import parse_args
 
 
 args = parse_args()
 cache_path = args.cache_path
+cache_lock = Lock()
 
 
 # load cache
@@ -67,28 +69,45 @@ def set_random_seed(seed):
     # tf.random.set_seed(seed)
 
 def get_frames_descriptions(parsed_candidate_descriptions):
-    if parsed_candidate_descriptions == None:
+    if parsed_candidate_descriptions is None:
         return None
-    
-    if isinstance(parsed_candidate_descriptions, list) and len(parsed_candidate_descriptions) > 0:
+
+    if isinstance(parsed_candidate_descriptions, list) and parsed_candidate_descriptions:
         parsed_candidate_descriptions = parsed_candidate_descriptions[0]
-    
+
     if not isinstance(parsed_candidate_descriptions, dict):
         return None
 
     if "frame_descriptions" in parsed_candidate_descriptions:
         frames_descriptions = parsed_candidate_descriptions["frame_descriptions"]
-        return frames_descriptions
-    # elif "descriptions" in parsed_candidate_descriptions:
-    #     frames_descriptions = parsed_candidate_descriptions["descriptions"]
-    # elif "description" in parsed_candidate_descriptions:
-    #     frames_descriptions = parsed_candidate_descriptions["description"]
+    elif "description" in parsed_candidate_descriptions:
+        frames_descriptions = [parsed_candidate_descriptions]
     else:
         print(f"\nERROR --util.get_frames_descriptions--: {parsed_candidate_descriptions}\n")
-        # if parsed_candidate_descriptions == None:
-        #     print("\nparsed_candidate_descriptions is None\n")
-        # raise KeyError
         return None
+
+    if isinstance(frames_descriptions, dict):
+        frames_descriptions = [frames_descriptions]
+    if not isinstance(frames_descriptions, list) or not frames_descriptions:
+        return None
+
+    normalized_descriptions = []
+    for description in frames_descriptions:
+        if isinstance(description, dict):
+            normalized_description = dict(description)
+            for key in ("segment_id", "duration"):
+                if key not in normalized_description and key in parsed_candidate_descriptions:
+                    normalized_description[key] = parsed_candidate_descriptions[key]
+            normalized_descriptions.append(normalized_description)
+        elif isinstance(description, str):
+            normalized_descriptions.append({
+                "segment_id": parsed_candidate_descriptions.get("segment_id"),
+                "duration": parsed_candidate_descriptions.get("duration"),
+                "description": description,
+            })
+        else:
+            return None
+    return normalized_descriptions
 
 
 # Add more robust error handling
@@ -153,10 +172,9 @@ def parse_text_find_number(text, logger):
     item = parse_json(text)
     try:
         match = int(get_value_from_dict(item))
-        if match in range(-1, 5):
+        if match in range(0, 5):
             return match
-        else:
-            return random.randint(0, 4)
+        return -1
     except Exception as e:
         logger.error(f"Answer Parsing Error: {e}")
         # pdb.set_trace()
@@ -196,20 +214,26 @@ def read_caption(captions, sample_idx):
 
 
 def get_from_cache(key, logger=None, use_logger=True):
-    try:
-        return cache_llm[key.encode()].decode()
-    except KeyError:
-        pass
-    except Exception as e:
-        if use_logger:
-            logger.warning(f"Error getting from cache: {e}")
+    with cache_lock:
+        try:
+            return cache_llm[key.encode()].decode()
+        except KeyError:
+            pass
+        except Exception as e:
+            if use_logger:
+                logger.warning(f"Error getting from cache: {e}")
     return None
 
 
 def save_to_cache(key, value, logger=None, use_logger=True):
     try:
-        cache_llm[key.encode()] = value.encode()
-        pickle.dump(cache_llm, open(cache_path, "wb"))
+        with cache_lock:
+            cache_llm[key.encode()] = value.encode()
+            Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
+            temporary_path = f"{cache_path}.tmp"
+            with open(temporary_path, "wb") as cache_file:
+                pickle.dump(cache_llm, cache_file)
+            os.replace(temporary_path, cache_path)
     except Exception as e:
         if use_logger:
             logger.warning(f"Error saving to cache: {e}")
@@ -218,8 +242,9 @@ def save_to_cache(key, value, logger=None, use_logger=True):
 def set_logger(timestamp, logger_path):
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
+    makedir(logger_path)
     logger_file_path = os.path.join(logger_path, f"{timestamp}.log")
-    file_handler = logging.FileHandler(logger_file_path)
+    file_handler = logging.FileHandler(logger_file_path, encoding="utf-8")
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s (line %(lineno)d)"
     )
